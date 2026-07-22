@@ -24,13 +24,25 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         }
     }
     
-    if COOKIES_FILE.exists():
+    # Check physical cookies file
+    if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
         opts["cookiefile"] = str(COOKIES_FILE)
     elif os.environ.get("YOUTUBE_COOKIES"):
-        cookies_env_path = TEMP_DIR / "env_cookies.txt"
-        with open(cookies_env_path, "w") as f:
-            f.write(os.environ.get("YOUTUBE_COOKIES"))
-        opts["cookiefile"] = str(cookies_env_path)
+        try:
+            TEMP_DIR.mkdir(parents=True, exist_ok=True)
+            cookies_env_path = TEMP_DIR / "env_cookies.txt"
+            raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
+            
+            # Unescape literal \n strings if Render converted newlines
+            if "\\n" in raw_cookies:
+                raw_cookies = raw_cookies.replace("\\n", "\n")
+                
+            with open(cookies_env_path, "w", encoding="utf-8") as f:
+                f.write(raw_cookies)
+                
+            opts["cookiefile"] = str(cookies_env_path)
+        except Exception:
+            pass
         
     if extra_opts:
         opts.update(extra_opts)
