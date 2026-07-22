@@ -43,15 +43,14 @@ async def get_media_info(url: str = Query(...)):
         raise HTTPException(status_code=400, detail="Debe ingresar una URL válida.")
         
     ydl_opts = get_ytdl_opts({
-        "skip_download": True,
-        "ignoreerrors": True,
+        "skip_download": True
     })
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
-                raise HTTPException(status_code=400, detail="No se pudo extraer información del video.")
+                raise HTTPException(status_code=400, detail="No se pudo extraer información del enlace.")
                 
             formats = []
             seen_res = set()
@@ -114,7 +113,6 @@ async def download_media(
             }],
         })
     else:
-        # Flexible format fallback
         if format_id and format_id != "best":
             fmt_spec = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
         else:
