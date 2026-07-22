@@ -1,0 +1,67 @@
+import io
+from pathlib import Path
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException
+from fastapi.responses import StreamingResponse
+import qrcode
+from PIL import Image
+
+from app.utils.file_manager import get_output_dir, set_output_dir, DEFAULT_OUTPUT_DIR
+
+router = APIRouter(prefix="/api/tools", tags=["tools"])
+
+@router.get("/settings")
+async def get_settings():
+    current_dir = get_output_dir()
+    return {
+        "output_dir": str(current_dir),
+        "default_dir": str(DEFAULT_OUTPUT_DIR),
+        "exists": current_dir.exists()
+    }
+
+@router.post("/settings")
+async def update_settings(output_dir: str = Form(...)):
+    if not output_dir.strip():
+        raise HTTPException(status_code=400, detail="Debes proporcionar una ruta válida.")
+    try:
+        updated_path = set_output_dir(output_dir.strip())
+        return {
+            "status": "success",
+            "output_dir": str(updated_path),
+            "message": f"Ruta de almacenamiento actualizada a {updated_path}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo configurar la carpeta: {str(e)}")
+
+@router.post("/qr/generate")
+async def generate_qr_code(
+    text: str = Form(...),
+    box_size: int = Form(10),
+    border: int = Form(2),
+    fill_color: str = Form("#000000"),
+    back_color: str = Form("#ffffff")
+):
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Debes ingresar texto o una URL para generar el código QR.")
+        
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=box_size,
+            border=border,
+        )
+        qr.add_data(text.strip())
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color=fill_color, back_color=back_color)
+        out_buf = io.BytesIO()
+        img.save(out_buf, format="PNG")
+        out_buf.seek(0)
+        
+        return StreamingResponse(
+            out_buf,
+            media_type="image/png",
+            headers={"Content-Disposition": "attachment; filename=codigo_qr.png"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar código QR: {str(e)}")

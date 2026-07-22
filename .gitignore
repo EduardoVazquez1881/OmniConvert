@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+backend/venv/
+backend/temp_storage/*
+!backend/temp_storage/.gitkeep
+backend/config.json
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
