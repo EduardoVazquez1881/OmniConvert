@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 
 COOKIES_FILE = Path(__file__).resolve().parent.parent.parent / "cookies.txt"
 
-def get_ytdl_opts(extra_opts: dict = None) -> dict:
+def get_ytdl_opts(extra_opts: dict = None, use_cookies: bool = False) -> dict:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -22,35 +22,37 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb", "android"]
+                "player_client": ["android_vr"]
             }
         }
     }
     
-    cookie_path = None
-    if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
-        cookie_path = str(COOKIES_FILE)
-    elif os.environ.get("YOUTUBE_COOKIES"):
-        try:
-            TEMP_DIR.mkdir(parents=True, exist_ok=True)
-            cookies_env_path = TEMP_DIR / "env_cookies.txt"
-            raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
-            
-            if "\\n" in raw_cookies:
-                raw_cookies = raw_cookies.replace("\\n", "\n")
+    if use_cookies:
+        cookie_path = None
+        if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
+            cookie_path = str(COOKIES_FILE)
+        elif os.environ.get("YOUTUBE_COOKIES"):
+            try:
+                TEMP_DIR.mkdir(parents=True, exist_ok=True)
+                cookies_env_path = TEMP_DIR / "env_cookies.txt"
+                raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
                 
-            if not raw_cookies.startswith("# Netscape"):
-                raw_cookies = "# Netscape HTTP Cookie File\n" + raw_cookies
+                if "\\n" in raw_cookies:
+                    raw_cookies = raw_cookies.replace("\\n", "\n")
+                    
+                if not raw_cookies.startswith("# Netscape"):
+                    raw_cookies = "# Netscape HTTP Cookie File\n" + raw_cookies
+                    
+                with open(cookies_env_path, "w", encoding="utf-8") as f:
+                    f.write(raw_cookies)
+                    
+                cookie_path = str(cookies_env_path)
+            except Exception:
+                pass
                 
-            with open(cookies_env_path, "w", encoding="utf-8") as f:
-                f.write(raw_cookies)
-                
-            cookie_path = str(cookies_env_path)
-        except Exception:
-            pass
-            
-    if cookie_path:
-        opts["cookiefile"] = cookie_path
+        if cookie_path:
+            opts["cookiefile"] = cookie_path
+            opts["extractor_args"]["youtube"]["player_client"] = ["web", "mweb"]
         
     if extra_opts:
         opts.update(extra_opts)
@@ -88,9 +90,7 @@ async def get_media_info(url: str = Query(...)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="Debe ingresar una URL válida.")
         
-    ydl_opts = get_ytdl_opts({
-        "skip_download": True
-    })
+    ydl_opts = get_ytdl_opts({"skip_download": True}, use_cookies=False)
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -151,17 +151,49 @@ async def download_media(
     out_template = str(TEMP_DIR / f"media_{file_id}.%(ext)s")
     
     last_err = ""
+    # Primary attempt: android_vr without cookies
     try:
         if download_type == "audio":
             ydl_opts = get_ytdl_opts({
                 "format": "bestaudio/best",
                 "outtmpl": out_template,
-            })
+            }, use_cookies=False)
         else:
             ydl_opts = get_ytdl_opts({
                 "format": "best/b/bestvideo+bestaudio",
                 "outtmpl": out_template,
-            })
+            }, use_cookies=False)
+            
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            
+            if not os.path.exists(filename):
+                candidates = list(TEMP_DIR.glob(f"media_{file_id}.*"))
+                if candidates:
+                    filename = str(candidates[0])
+                    
+            if os.path.exists(filename):
+                safe_title = "".join([c if c.isalnum() or c in ("-", "_") else "_" for c in info.get("title", "download")])
+                ext = Path(filename).suffix
+                download_name = f"{safe_title}{ext}"
+                media_type = "audio/mpeg" if ext in [".mp3", ".m4a", ".aac"] else "video/mp4"
+                return FileResponse(filename, filename=download_name, media_type=media_type)
+    except Exception as e:
+        last_err = str(e)
+        
+    # Secondary attempt: with cookies fallback
+    try:
+        if download_type == "audio":
+            ydl_opts = get_ytdl_opts({
+                "format": "bestaudio/best",
+                "outtmpl": out_template,
+            }, use_cookies=True)
+        else:
+            ydl_opts = get_ytdl_opts({
+                "format": "best/b/bestvideo+bestaudio",
+                "outtmpl": out_template,
+            }, use_cookies=True)
             
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
