@@ -16,10 +16,11 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
+        "source_address": "0.0.0.0",  # Force IPv4 socket binding to bypass IPv6 cloud datacenter blocks
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "android_creator", "android"]
+                "player_client": ["android", "web", "mweb"]
             }
         }
     }
