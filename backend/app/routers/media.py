@@ -22,7 +22,7 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web", "mweb"]
+                "player_client": ["tv_embedded", "android", "mweb", "web"]
             }
         }
     }
@@ -158,10 +158,10 @@ async def download_media(
             }],
         })
     else:
-        if format_id and format_id != "best":
-            fmt_spec = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
-        else:
-            fmt_spec = "bestvideo+bestaudio/best"
+        # Universal download format string prioritizing single combined stream then multi-stream
+        fmt_spec = "best/b/bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio"
+        if format_id and format_id not in ["best", "360p", "720p", "1080p"]:
+            fmt_spec = f"{format_id}+bestaudio/best/b"
             
         ydl_opts = get_ytdl_opts({
             "format": fmt_spec,
