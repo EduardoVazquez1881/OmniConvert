@@ -44,7 +44,7 @@ async def get_media_info(url: str = Query(...)):
         
     ydl_opts = get_ytdl_opts({
         "skip_download": True,
-        "format": None  # Ensure yt-dlp fetches all metadata without filtering format
+        "ignoreerrors": True,
     })
     
     try:
@@ -72,7 +72,6 @@ async def get_media_info(url: str = Query(...)):
                     
             formats.sort(key=lambda x: x["height"], reverse=True)
             
-            # Fallback formats if no heights parsed
             if not formats:
                 formats = [
                     {"format_id": "best", "resolution": "Máxima Calidad (Auto)", "height": 1080, "ext": "mp4"}
@@ -90,7 +89,7 @@ async def get_media_info(url: str = Query(...)):
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=400, 
-                detail="YouTube ha restringido temporalmente este enlace en la nube. Configura la variable YOUTUBE_COOKIES en Render."
+                detail="YouTube ha restringido este enlace por bot en la nube. Configura la variable YOUTUBE_COOKIES en Render."
             )
         raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {err_str}")
 
@@ -115,11 +114,11 @@ async def download_media(
             }],
         })
     else:
-        # Flexible format fallback matching string
+        # Flexible format fallback
         if format_id and format_id != "best":
-            fmt_spec = f"{format_id}+bestaudio/bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best"
+            fmt_spec = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
         else:
-            fmt_spec = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best"
+            fmt_spec = "bestvideo+bestaudio/best"
             
         ydl_opts = get_ytdl_opts({
             "format": fmt_spec,
@@ -155,6 +154,6 @@ async def download_media(
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=500, 
-                detail="YouTube restringió temporalmente la descarga en la nube. Configura la variable YOUTUBE_COOKIES en Render."
+                detail="YouTube restringió la descarga por bot en la nube. Configura YOUTUBE_COOKIES en Render."
             )
         raise HTTPException(status_code=500, detail=f"Error durante la descarga: {err_str}")

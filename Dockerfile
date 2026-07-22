@@ -10,9 +10,10 @@ RUN npm run build
 FROM python:3.13-slim
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for video/audio processing)
+# Install system dependencies (ffmpeg for video/audio processing, nodejs for yt-dlp JS decipher engine)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    nodejs \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
