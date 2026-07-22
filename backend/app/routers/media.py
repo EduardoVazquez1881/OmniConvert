@@ -19,11 +19,10 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "quiet": True,
         "no_warnings": True,
         "nocheckcertificate": True,
-        "source_address": "0.0.0.0",
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "extractor_args": {
             "youtube": {
-                "player_client": ["android"]
+                "player_client": ["android", "web"]
             }
         }
     }
@@ -82,33 +81,6 @@ def fetch_oembed_youtube_info(raw_url: str):
             }
     except Exception:
         pass
-    return None
-
-def download_youtube_stream_fallback(video_id: str, download_type: str, file_id: str):
-    """Emergency fallback stream downloader for YouTube videos on Cloud Datacenter IPs"""
-    itag = "140" if download_type == "audio" else "18"
-    ext = "m4a" if download_type == "audio" else "mp4"
-    out_file = TEMP_DIR / f"media_{file_id}.{ext}"
-    
-    stream_mirrors = [
-        f"https://inv.zoomerville.com/latest_version?id={video_id}&itag={itag}",
-        f"https://yewtu.be/latest_version?id={video_id}&itag={itag}",
-        f"https://invidious.drgns.space/latest_version?id={video_id}&itag={itag}",
-    ]
-    
-    for mirror_url in stream_mirrors:
-        try:
-            r = requests.get(mirror_url, stream=True, timeout=8)
-            if r.status_code == 200:
-                with open(out_file, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=65536):
-                        if chunk:
-                            f.write(chunk)
-                if out_file.exists() and out_file.stat().st_size > 0:
-                    return str(out_file)
-        except Exception:
-            continue
-            
     return None
 
 @router.get("/info")
@@ -178,7 +150,7 @@ async def download_media(
     file_id = uuid.uuid4().hex[:8]
     out_template = str(TEMP_DIR / f"media_{file_id}.%(ext)s")
     
-    # Primary attempt: yt-dlp
+    last_err = ""
     try:
         if download_type == "audio":
             ydl_opts = get_ytdl_opts({
@@ -195,7 +167,6 @@ async def download_media(
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-            # Check if target file or any matching file_id file exists
             if not os.path.exists(filename):
                 candidates = list(TEMP_DIR.glob(f"media_{file_id}.*"))
                 if candidates:
@@ -207,21 +178,10 @@ async def download_media(
                 download_name = f"{safe_title}{ext}"
                 media_type = "audio/mpeg" if ext in [".mp3", ".m4a", ".aac"] else "video/mp4"
                 return FileResponse(filename, filename=download_name, media_type=media_type)
-    except Exception:
-        pass
+    except Exception as e:
+        last_err = str(e)
         
-    # Emergency fallback for YouTube on Cloud Datacenter IPs
-    if "youtube.com" in url or "youtu.be" in url:
-        video_id = extract_youtube_video_id(url)
-        if video_id:
-            fallback_file = download_youtube_stream_fallback(video_id, download_type, file_id)
-            if fallback_file and os.path.exists(fallback_file):
-                ext = Path(fallback_file).suffix
-                media_type = "audio/mpeg" if ext in [".mp3", ".m4a", ".aac"] else "video/mp4"
-                download_name = f"youtube_{video_id}{ext}"
-                return FileResponse(fallback_file, filename=download_name, media_type=media_type)
-                
     raise HTTPException(
         status_code=500, 
-        detail="Error durante la descarga del archivo. Intenta nuevamente o usa otro enlace multimedia."
+        detail=f"Error durante la descarga: {last_err or 'No se pudo obtener el archivo.'}"
     )
