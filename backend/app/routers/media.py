@@ -9,21 +9,36 @@ from app.utils.file_manager import get_temp_path, cleanup_old_files, TEMP_DIR
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
+# Common ytdlp extractor arguments to bypass YouTube Cloud Bot Detection (Android/iOS client spoofing)
+CLOUD_YTDL_CLIENTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "nocheckcertificate": True,
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "ios", "mweb", "web_embedded"],
+            "skip": ["hls", "dash"]
+        }
+    }
+}
+
 @router.get("/info")
 async def get_media_info(url: str = Query(...)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="Debe ingresar una URL válida.")
         
     ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
+        **CLOUD_YTDL_CLIENTS,
         "skip_download": True,
     }
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            
+            if not info:
+                raise HTTPException(status_code=400, detail="No se pudo extraer información del video.")
+                
             formats = []
             seen_res = set()
             for f in info.get("formats", []):
@@ -46,7 +61,7 @@ async def get_media_info(url: str = Query(...)):
                 "thumbnail": info.get("thumbnail"),
                 "duration": info.get("duration", 0),
                 "uploader": info.get("uploader", "Desconocido"),
-                "formats": formats[:6]  # Top resolutions
+                "formats": formats[:6]
             }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {str(e)}")
@@ -54,7 +69,7 @@ async def get_media_info(url: str = Query(...)):
 @router.post("/download")
 async def download_media(
     url: str = Form(...),
-    download_type: str = Form("video"), # 'video' or 'audio'
+    download_type: str = Form("video"),
     format_id: str = Form(None)
 ):
     cleanup_old_files()
@@ -63,6 +78,7 @@ async def download_media(
     
     if download_type == "audio":
         ydl_opts = {
+            **CLOUD_YTDL_CLIENTS,
             "format": "bestaudio/best",
             "outtmpl": out_template,
             "postprocessors": [{
@@ -70,14 +86,13 @@ async def download_media(
                 "preferredcodec": "mp3",
                 "preferredquality": "192",
             }],
-            "quiet": True,
         }
     else:
         fmt_spec = format_id if format_id else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         ydl_opts = {
+            **CLOUD_YTDL_CLIENTS,
             "format": fmt_spec,
             "outtmpl": out_template,
-            "quiet": True,
         }
         
     try:
@@ -86,13 +101,11 @@ async def download_media(
             filename = ydl.prepare_filename(info)
             
             if download_type == "audio":
-                # Ensure .mp3 extension if converted or fallback
                 base = os.path.splitext(filename)[0]
                 if os.path.exists(f"{base}.mp3"):
                     filename = f"{base}.mp3"
                     
             if not os.path.exists(filename):
-                # Search for created file with matching file_id
                 candidates = list(TEMP_DIR.glob(f"media_{file_id}.*"))
                 if candidates:
                     filename = str(candidates[0])
