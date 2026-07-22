@@ -17,6 +17,11 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "no_warnings": True,
         "nocheckcertificate": True,
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["tv_embedded", "android_creator", "android"]
+            }
+        }
     }
     
     cookie_path = None
@@ -31,7 +36,6 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
             if "\\n" in raw_cookies:
                 raw_cookies = raw_cookies.replace("\\n", "\n")
                 
-            # Ensure Netscape header exists if missing
             if not raw_cookies.startswith("# Netscape"):
                 raw_cookies = "# Netscape HTTP Cookie File\n" + raw_cookies
                 
@@ -44,19 +48,6 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
             
     if cookie_path:
         opts["cookiefile"] = cookie_path
-        # When cookies are present, use web & mweb clients so yt-dlp actually uses the browser cookies!
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["web", "mweb"]
-            }
-        }
-    else:
-        # Without cookies, fallback to android/ios spoofing
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["android", "ios", "mweb", "web"]
-            }
-        }
         
     if extra_opts:
         opts.update(extra_opts)
@@ -114,7 +105,7 @@ async def get_media_info(url: str = Query(...)):
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=400, 
-                detail="YouTube ha restringido este enlace por bot en la nube. Revisa que las cookies de YouTube estén actualizadas en Configuraciones."
+                detail="YouTube ha restringido este enlace en la nube. Intenta con otro video o enlace multimedia."
             )
         raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {err_str}")
 
@@ -178,6 +169,6 @@ async def download_media(
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=500, 
-                detail="YouTube restringió la descarga por bot en la nube. Revisa que las cookies de YouTube estén actualizadas."
+                detail="YouTube restringió la descarga por bot en la nube. Intenta con otro video o enlace."
             )
         raise HTTPException(status_code=500, detail=f"Error durante la descarga: {err_str}")
