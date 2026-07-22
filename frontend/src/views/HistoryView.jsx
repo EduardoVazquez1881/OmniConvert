@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { History, Trash2, FileText, Video, Image as ImageIcon, QrCode, Copy, Check, FolderOpen, Clock, Download, Globe, ShieldCheck } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/tools";
+const API_BASE = "/api/tools";
 
 export default function HistoryView() {
   const [historyItems, setHistoryItems] = useState(() => {
@@ -17,7 +17,6 @@ export default function HistoryView() {
   const [copiedId, setCopiedId] = useState(null);
   const [isLocalHost, setIsLocalHost] = useState(true);
 
-  // Detect if running locally or deployed on cloud
   useEffect(() => {
     const hostname = window.location.hostname;
     setIsLocalHost(hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.'));

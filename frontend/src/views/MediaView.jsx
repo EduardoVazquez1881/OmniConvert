@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Video, Download, Loader2, Music, AlertCircle, Play } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/media";
+const API_BASE = "/api/media";
 
 export default function MediaView({ initialSubTab }) {
   const [url, setUrl] = useState('');

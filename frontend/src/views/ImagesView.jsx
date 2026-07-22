@@ -3,7 +3,7 @@ import axios from 'axios';
 import Dropzone from '../components/Dropzone';
 import { Image as ImageIcon, Download, Loader2, Sliders, AlertCircle, Film, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/images";
+const API_BASE = "/api/images";
 
 export default function ImagesView({ initialSubTab }) {
   const [activeSubTab, setActiveSubTab] = useState('convert');

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Settings, Palette, Check, HardDrive, FolderOpen, Save, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/tools";
+const API_BASE = "/api/tools";
 
 export default function SettingsView() {
   const [currentTheme, setCurrentTheme] = useState(() => {
@@ -45,7 +45,6 @@ export default function SettingsView() {
     }
   ];
 
-  // Fetch current storage directory settings
   const fetchStorageSettings = async () => {
     try {
       const res = await axios.get(`${API_BASE}/settings`);

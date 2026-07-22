@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { QrCode, Download, Loader2, Sparkles } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/tools";
+const API_BASE = "/api/tools";
 
 export default function QrView() {
   const [text, setText] = useState('https://github.com');

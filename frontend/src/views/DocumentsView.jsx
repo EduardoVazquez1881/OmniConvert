@@ -3,7 +3,7 @@ import axios from 'axios';
 import Dropzone from '../components/Dropzone';
 import { FileText, Download, Loader2, FileSpreadsheet, Layers, FileArchive } from 'lucide-react';
 
-const API_BASE = "http://localhost:8000/api/documents";
+const API_BASE = "/api/documents";
 
 export default function DocumentsView({ initialSubTab }) {
   const [activeSubTab, setActiveSubTab] = useState('pdf-docx');
