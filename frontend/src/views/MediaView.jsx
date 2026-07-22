@@ -55,6 +55,15 @@ export default function MediaView({ initialSubTab }) {
         responseType: 'blob'
       });
 
+      // Check if response is actually an error JSON returned as a Blob
+      if (res.data.type === 'application/json') {
+        const errorText = await res.data.text();
+        const errorJson = JSON.parse(errorText);
+        setErrorMsg(errorJson.detail || 'Error durante la descarga del archivo.');
+        setDownloading(false);
+        return;
+      }
+
       let filename = downloadType === 'audio' ? 'audio.mp3' : 'video.mp4';
       const contentDisposition = res.headers['content-disposition'];
       if (contentDisposition) {
@@ -64,7 +73,7 @@ export default function MediaView({ initialSubTab }) {
         }
       }
 
-      const downloadUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const downloadUrl = window.URL.createObjectURL(new Blob([res.data], { type: res.headers['content-type'] }));
       const link = document.createElement('a');
       link.href = downloadUrl;
       link.setAttribute('download', filename);
@@ -72,7 +81,17 @@ export default function MediaView({ initialSubTab }) {
       link.click();
       link.remove();
     } catch (err) {
-      setErrorMsg(err.response?.data?.detail || 'Error durante la descarga del archivo.');
+      if (err.response?.data && err.response.data instanceof Blob) {
+        try {
+          const errorText = await err.response.data.text();
+          const errorJson = JSON.parse(errorText);
+          setErrorMsg(errorJson.detail || 'Error durante la descarga del archivo.');
+        } catch {
+          setErrorMsg('Error durante la descarga del archivo.');
+        }
+      } else {
+        setErrorMsg(err.response?.data?.detail || 'Error durante la descarga del archivo.');
+      }
     } finally {
       setDownloading(false);
     }
