@@ -17,32 +17,46 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "no_warnings": True,
         "nocheckcertificate": True,
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "mweb", "web"]
-            }
-        }
     }
     
-    # Check physical cookies file
+    cookie_path = None
     if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0:
-        opts["cookiefile"] = str(COOKIES_FILE)
+        cookie_path = str(COOKIES_FILE)
     elif os.environ.get("YOUTUBE_COOKIES"):
         try:
             TEMP_DIR.mkdir(parents=True, exist_ok=True)
             cookies_env_path = TEMP_DIR / "env_cookies.txt"
             raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
             
-            # Unescape literal \n strings if Render converted newlines
             if "\\n" in raw_cookies:
                 raw_cookies = raw_cookies.replace("\\n", "\n")
+                
+            # Ensure Netscape header exists if missing
+            if not raw_cookies.startswith("# Netscape"):
+                raw_cookies = "# Netscape HTTP Cookie File\n" + raw_cookies
                 
             with open(cookies_env_path, "w", encoding="utf-8") as f:
                 f.write(raw_cookies)
                 
-            opts["cookiefile"] = str(cookies_env_path)
+            cookie_path = str(cookies_env_path)
         except Exception:
             pass
+            
+    if cookie_path:
+        opts["cookiefile"] = cookie_path
+        # When cookies are present, use web & mweb clients so yt-dlp actually uses the browser cookies!
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["web", "mweb"]
+            }
+        }
+    else:
+        # Without cookies, fallback to android/ios spoofing
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "web"]
+            }
+        }
         
     if extra_opts:
         opts.update(extra_opts)
@@ -100,7 +114,7 @@ async def get_media_info(url: str = Query(...)):
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=400, 
-                detail="YouTube ha restringido este enlace por bot en la nube. Configura la variable YOUTUBE_COOKIES en Render."
+                detail="YouTube ha restringido este enlace por bot en la nube. Revisa que las cookies de YouTube estén actualizadas en Configuraciones."
             )
         raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {err_str}")
 
@@ -164,6 +178,6 @@ async def download_media(
         if "Sign in to confirm" in err_str or "bot" in err_str:
             raise HTTPException(
                 status_code=500, 
-                detail="YouTube restringió la descarga por bot en la nube. Configura YOUTUBE_COOKIES en Render."
+                detail="YouTube restringió la descarga por bot en la nube. Revisa que las cookies de YouTube estén actualizadas."
             )
         raise HTTPException(status_code=500, detail=f"Error durante la descarga: {err_str}")
