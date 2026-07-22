@@ -90,21 +90,26 @@ def download_youtube_stream_fallback(video_id: str, download_type: str, file_id:
     ext = "m4a" if download_type == "audio" else "mp4"
     out_file = TEMP_DIR / f"media_{file_id}.{ext}"
     
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    }
+    
     stream_mirrors = [
         f"https://inv.zoomerville.com/latest_version?id={video_id}&itag={itag}",
         f"https://yewtu.be/latest_version?id={video_id}&itag={itag}",
         f"https://invidious.drgns.space/latest_version?id={video_id}&itag={itag}",
+        f"https://vid.puffyan.us/latest_version?id={video_id}&itag={itag}"
     ]
     
     for mirror_url in stream_mirrors:
         try:
-            r = requests.get(mirror_url, stream=True, timeout=10)
+            r = requests.get(mirror_url, headers=headers, stream=True, timeout=10, allow_redirects=True)
             if r.status_code == 200:
                 with open(out_file, "wb") as f:
                     for chunk in r.iter_content(chunk_size=65536):
                         if chunk:
                             f.write(chunk)
-                if out_file.exists() and out_file.stat().st_size > 0:
+                if out_file.exists() and out_file.stat().st_size > 500:
                     return str(out_file)
         except Exception:
             continue
