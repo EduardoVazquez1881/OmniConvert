@@ -87,7 +87,7 @@ def fetch_oembed_youtube_info(raw_url: str):
 def download_youtube_stream_fallback(video_id: str, download_type: str, file_id: str):
     """Emergency fallback stream downloader for YouTube videos on Cloud Datacenter IPs"""
     itag = "140" if download_type == "audio" else "18"
-    ext = "mp3" if download_type == "audio" else "mp4"
+    ext = "m4a" if download_type == "audio" else "mp4"
     out_file = TEMP_DIR / f"media_{file_id}.{ext}"
     
     stream_mirrors = [
@@ -158,7 +158,6 @@ async def get_media_info(url: str = Query(...)):
                 "formats": formats[:6]
             }
     except Exception:
-        # Fallback to YouTube OEMBED API with URL encoding
         if "youtube.com" in url or "youtu.be" in url:
             fallback_data = fetch_oembed_youtube_info(url)
             if fallback_data:
@@ -185,11 +184,6 @@ async def download_media(
             ydl_opts = get_ytdl_opts({
                 "format": "bestaudio/best",
                 "outtmpl": out_template,
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }],
             })
         else:
             ydl_opts = get_ytdl_opts({
@@ -201,16 +195,17 @@ async def download_media(
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-            if download_type == "audio":
-                base = os.path.splitext(filename)[0]
-                if os.path.exists(f"{base}.mp3"):
-                    filename = f"{base}.mp3"
+            # Check if target file or any matching file_id file exists
+            if not os.path.exists(filename):
+                candidates = list(TEMP_DIR.glob(f"media_{file_id}.*"))
+                if candidates:
+                    filename = str(candidates[0])
                     
             if os.path.exists(filename):
                 safe_title = "".join([c if c.isalnum() or c in ("-", "_") else "_" for c in info.get("title", "download")])
                 ext = Path(filename).suffix
                 download_name = f"{safe_title}{ext}"
-                media_type = "audio/mpeg" if ext == ".mp3" else "video/mp4"
+                media_type = "audio/mpeg" if ext in [".mp3", ".m4a", ".aac"] else "video/mp4"
                 return FileResponse(filename, filename=download_name, media_type=media_type)
     except Exception:
         pass
@@ -222,8 +217,8 @@ async def download_media(
             fallback_file = download_youtube_stream_fallback(video_id, download_type, file_id)
             if fallback_file and os.path.exists(fallback_file):
                 ext = Path(fallback_file).suffix
-                media_type = "audio/mpeg" if ext == ".mp3" else "video/mp4"
-                download_name = f"video_youtube_{video_id}{ext}"
+                media_type = "audio/mpeg" if ext in [".mp3", ".m4a", ".aac"] else "video/mp4"
+                download_name = f"youtube_{video_id}{ext}"
                 return FileResponse(fallback_file, filename=download_name, media_type=media_type)
                 
     raise HTTPException(
