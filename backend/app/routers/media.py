@@ -9,29 +9,43 @@ from app.utils.file_manager import get_temp_path, cleanup_old_files, TEMP_DIR
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
-# Common ytdlp extractor arguments to bypass YouTube Cloud Bot Detection (Android/iOS client spoofing)
-CLOUD_YTDL_CLIENTS = {
-    "quiet": True,
-    "no_warnings": True,
-    "nocheckcertificate": True,
-    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["android", "ios", "mweb", "web_embedded"],
-            "skip": ["hls", "dash"]
+# Path for optional cookies file if uploaded or set via environment
+COOKIES_FILE = Path(__file__).resolve().parent.parent.parent / "cookies.txt"
+
+def get_ytdl_opts(extra_opts: dict = None) -> dict:
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "nocheckcertificate": True,
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web_creator", "tv_embedded", "mweb", "ios", "android"],
+                "player_skip": ["configs", "webpage"]
+            }
         }
     }
-}
+    
+    # Use cookies.txt if exists on server or if set via YOUTUBE_COOKIES env var
+    if COOKIES_FILE.exists():
+        opts["cookiefile"] = str(COOKIES_FILE)
+    elif os.environ.get("YOUTUBE_COOKIES"):
+        cookies_env_path = TEMP_DIR / "env_cookies.txt"
+        with open(cookies_env_path, "w") as f:
+            f.write(os.environ.get("YOUTUBE_COOKIES"))
+        opts["cookiefile"] = str(cookies_env_path)
+        
+    if extra_opts:
+        opts.update(extra_opts)
+        
+    return opts
 
 @router.get("/info")
 async def get_media_info(url: str = Query(...)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="Debe ingresar una URL válida.")
         
-    ydl_opts = {
-        **CLOUD_YTDL_CLIENTS,
-        "skip_download": True,
-    }
+    ydl_opts = get_ytdl_opts({"skip_download": True})
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -64,7 +78,13 @@ async def get_media_info(url: str = Query(...)):
                 "formats": formats[:6]
             }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {str(e)}")
+        err_str = str(e)
+        if "Sign in to confirm" in err_str or "bot" in err_str:
+            raise HTTPException(
+                status_code=400, 
+                detail="YouTube ha restringido temporalmente este enlace por detección de bot en el servidor. Intenta con otro enlace o agrega cookies en configuración."
+            )
+        raise HTTPException(status_code=400, detail=f"No se pudo obtener información del enlace: {err_str}")
 
 @router.post("/download")
 async def download_media(
@@ -77,8 +97,7 @@ async def download_media(
     out_template = str(TEMP_DIR / f"media_{file_id}.%(ext)s")
     
     if download_type == "audio":
-        ydl_opts = {
-            **CLOUD_YTDL_CLIENTS,
+        ydl_opts = get_ytdl_opts({
             "format": "bestaudio/best",
             "outtmpl": out_template,
             "postprocessors": [{
@@ -86,14 +105,13 @@ async def download_media(
                 "preferredcodec": "mp3",
                 "preferredquality": "192",
             }],
-        }
+        })
     else:
         fmt_spec = format_id if format_id else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        ydl_opts = {
-            **CLOUD_YTDL_CLIENTS,
+        ydl_opts = get_ytdl_opts({
             "format": fmt_spec,
             "outtmpl": out_template,
-        }
+        })
         
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -120,4 +138,10 @@ async def download_media(
             return FileResponse(filename, filename=download_name, media_type=media_type)
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error durante la descarga: {str(e)}")
+        err_str = str(e)
+        if "Sign in to confirm" in err_str or "bot" in err_str:
+            raise HTTPException(
+                status_code=500, 
+                detail="YouTube bloqueó temporalmente la descarga en la nube. Intenta con un enlace de TikTok, Vimeo, Twitter o agrega cookies."
+            )
+        raise HTTPException(status_code=500, detail=f"Error durante la descarga: {err_str}")
