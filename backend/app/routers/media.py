@@ -22,7 +22,7 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"]
+                "player_client": ["android", "ios"]
             }
         }
     }
