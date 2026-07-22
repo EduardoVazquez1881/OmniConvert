@@ -9,6 +9,8 @@ from app.utils.file_manager import get_output_dir, set_output_dir, DEFAULT_OUTPU
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
+COOKIES_FILE = Path(__file__).resolve().parent.parent.parent / "cookies.txt"
+
 @router.get("/settings")
 async def get_settings():
     current_dir = get_output_dir()
@@ -31,6 +33,51 @@ async def update_settings(output_dir: str = Form(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"No se pudo configurar la carpeta: {str(e)}")
+
+@router.get("/cookies")
+async def get_cookies_status():
+    has_file = COOKIES_FILE.exists()
+    size = COOKIES_FILE.stat().st_size if has_file else 0
+    return {
+        "active": has_file and size > 0,
+        "size_bytes": size
+    }
+
+@router.post("/cookies")
+async def save_cookies(
+    cookies_text: str = Form(None),
+    file: UploadFile = File(None)
+):
+    try:
+        content = ""
+        if file:
+            file_bytes = await file.read()
+            content = file_bytes.decode("utf-8", errors="ignore")
+        elif cookies_text:
+            content = cookies_text.strip()
+            
+        if not content:
+            raise HTTPException(status_code=400, detail="Debes subir un archivo cookies.txt o pegar su contenido.")
+            
+        with open(COOKIES_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+            
+        return {
+            "status": "success",
+            "message": "Cookies de YouTube guardadas y activadas correctamente.",
+            "active": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al guardar cookies: {str(e)}")
+
+@router.delete("/cookies")
+async def delete_cookies():
+    if COOKIES_FILE.exists():
+        try:
+            COOKIES_FILE.unlink()
+        except Exception:
+            pass
+    return {"status": "success", "active": False, "message": "Cookies de YouTube eliminadas."}
 
 @router.post("/qr/generate")
 async def generate_qr_code(

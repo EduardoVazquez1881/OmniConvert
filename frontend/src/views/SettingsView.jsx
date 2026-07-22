@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Settings, Palette, Check, HardDrive, FolderOpen, Save, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Settings, Palette, Check, HardDrive, FolderOpen, Save, RotateCcw, AlertCircle, CheckCircle2, Loader2, ShieldCheck, Key, Trash2, Upload } from 'lucide-react';
 
 const API_BASE = "/api/tools";
 
@@ -13,6 +13,12 @@ export default function SettingsView() {
   const [defaultDir, setDefaultDir] = useState('');
   const [savingDir, setSavingDir] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+
+  // YouTube Cookies states
+  const [cookiesActive, setCookiesActive] = useState(false);
+  const [cookiesText, setCookiesText] = useState('');
+  const [savingCookies, setSavingCookies] = useState(false);
+  const [cookieStatusMsg, setCookieStatusMsg] = useState({ type: '', text: '' });
 
   const themes = [
     {
@@ -56,8 +62,18 @@ export default function SettingsView() {
     }
   };
 
+  const fetchCookiesStatus = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/cookies`);
+      setCookiesActive(res.data.active);
+    } catch {
+      setCookiesActive(false);
+    }
+  };
+
   useEffect(() => {
     fetchStorageSettings();
+    fetchCookiesStatus();
   }, []);
 
   const handleThemeChange = (themeId) => {
@@ -92,6 +108,42 @@ export default function SettingsView() {
     }
   };
 
+  const handleSaveCookies = async (uploadedFile) => {
+    setSavingCookies(true);
+    setCookieStatusMsg({ type: '', text: '' });
+    try {
+      const formData = new FormData();
+      if (uploadedFile) {
+        formData.append('file', uploadedFile);
+      } else if (cookiesText.trim()) {
+        formData.append('cookies_text', cookiesText.trim());
+      } else {
+        setCookieStatusMsg({ type: 'error', text: 'Pega el texto de cookies.txt o sube un archivo.' });
+        setSavingCookies(false);
+        return;
+      }
+
+      const res = await axios.post(`${API_BASE}/cookies`, formData);
+      setCookiesActive(true);
+      setCookiesText('');
+      setCookieStatusMsg({ type: 'success', text: res.data.message });
+    } catch (err) {
+      setCookieStatusMsg({ type: 'error', text: err.response?.data?.detail || 'Error al guardar cookies.' });
+    } finally {
+      setSavingCookies(false);
+    }
+  };
+
+  const handleDeleteCookies = async () => {
+    try {
+      await axios.delete(`${API_BASE}/cookies`);
+      setCookiesActive(false);
+      setCookieStatusMsg({ type: 'success', text: 'Cookies desactivadas.' });
+    } catch (err) {
+      setCookieStatusMsg({ type: 'error', text: 'Error al desactivar cookies.' });
+    }
+  };
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
   }, [currentTheme]);
@@ -102,11 +154,86 @@ export default function SettingsView() {
         <div>
           <h2 className="text-2xl font-bold text-main flex items-center gap-2">
             <Settings className="w-7 h-7 text-cyan-500" />
-            Configuración del Sistema & Almacenamiento
+            Configuración del Sistema & Ajustes
           </h2>
           <p className="text-sm text-muted mt-1">
-            Configura la carpeta de destino para tus descargas y personaliza la apariencia de la interfaz.
+            Configura la carpeta de destino, la autenticación de YouTube para evitar bloqueos en la nube y los temas de la app.
           </p>
+        </div>
+
+        {/* YouTube Cookies Section (Bypass Bot Detection) */}
+        <div className="space-y-4 pt-4 border-t border-slate-800/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h3 className="text-base font-bold text-main flex items-center gap-2">
+              <Key className="w-5 h-5 text-purple-500" />
+              Autenticación de YouTube (Bypass de Bot en la Nube)
+            </h3>
+            
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
+                cookiesActive
+                  ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-500 border-amber-500/30'
+              }`}>
+                {cookiesActive ? 'Cookies Activas 🟢' : 'Cookies Inactivas 🟡'}
+              </span>
+              {cookiesActive && (
+                <button
+                  onClick={handleDeleteCookies}
+                  className="p-1.5 rounded-lg text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20"
+                  title="Eliminar cookies"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted leading-relaxed">
+            Si Render bloquea un enlace de YouTube por detección de bot ("Sign in to confirm you're not a bot"), puedes exportar tus cookies de YouTube con la extensión gratuita de navegador <strong className="text-main">Get cookies.txt LOCALLY</strong> y pegarlas o subir el archivo aquí.
+          </p>
+
+          <div className="space-y-3 pt-2">
+            <textarea
+              rows="4"
+              value={cookiesText}
+              onChange={(e) => setCookiesText(e.target.value)}
+              placeholder="Pega aquí el contenido de tu archivo cookies.txt de YouTube..."
+              className="glass-input font-mono text-xs resize-none"
+            />
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <label className="btn-primary cursor-pointer py-2.5 px-4 text-xs whitespace-nowrap bg-slate-800 hover:bg-slate-700">
+                <Upload className="w-4 h-4 text-white" /> Subir archivo cookies.txt
+                <input
+                  type="file"
+                  accept=".txt"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleSaveCookies(e.target.files[0])}
+                />
+              </label>
+
+              <button
+                onClick={() => handleSaveCookies(null)}
+                disabled={savingCookies || !cookiesText.trim()}
+                className="btn-primary py-2.5 px-6 text-xs w-full sm:w-auto"
+              >
+                {savingCookies ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-white" />}
+                {savingCookies ? 'Guardando...' : 'Guardar y Activar Cookies'}
+              </button>
+            </div>
+
+            {cookieStatusMsg.text && (
+              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                cookieStatusMsg.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500 font-semibold'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+              }`}>
+                {cookieStatusMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                {cookieStatusMsg.text}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Storage Path Configuration Section */}
@@ -219,13 +346,13 @@ export default function SettingsView() {
             <div className="p-4 rounded-xl glass-card space-y-1">
               <span className="text-xs text-muted font-semibold uppercase">Modo de Ejecución</span>
               <p className="text-sm font-bold text-emerald-500 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Servidor Local FastAPI Activo
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Servidor Activo
               </p>
             </div>
             <div className="p-4 rounded-xl glass-card space-y-1">
-              <span className="text-xs text-muted font-semibold uppercase">Destino Activo</span>
-              <p className="text-xs font-mono text-main truncate font-bold mt-1">
-                {outputDir || '/home/eduvz/Downloads'}
+              <span className="text-xs text-muted font-semibold uppercase">Cookies YouTube</span>
+              <p className="text-sm font-bold text-main flex items-center gap-1.5">
+                {cookiesActive ? '🟢 Activas y Configuradas' : '🟡 No Configuradas'}
               </p>
             </div>
           </div>
