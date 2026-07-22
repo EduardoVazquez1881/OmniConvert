@@ -1,6 +1,7 @@
 import os
 import uuid
 import requests
+from urllib.parse import quote
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query, Form
 from fastapi.responses import FileResponse
@@ -56,10 +57,11 @@ def get_ytdl_opts(extra_opts: dict = None) -> dict:
         
     return opts
 
-def fetch_oembed_youtube_info(url: str):
+def fetch_oembed_youtube_info(raw_url: str):
     """Fallback metadata extractor using YouTube No-Cookie OEMBED API (Never blocked on Datacenter IPs)"""
     try:
-        oembed_url = f"https://www.youtube-nocookie.com/oembed?url={url}&format=json"
+        encoded_url = quote(raw_url.strip(), safe='')
+        oembed_url = f"https://www.youtube-nocookie.com/oembed?url={encoded_url}&format=json"
         r = requests.get(oembed_url, timeout=5)
         if r.status_code == 200:
             data = r.json()
@@ -124,7 +126,7 @@ async def get_media_info(url: str = Query(...)):
                 "formats": formats[:6]
             }
     except Exception:
-        # Fallback to YouTube OEMBED API if yt-dlp triggers cloud datacenter block
+        # Fallback to YouTube OEMBED API with URL encoding
         if "youtube.com" in url or "youtu.be" in url:
             fallback_data = fetch_oembed_youtube_info(url)
             if fallback_data:
@@ -132,7 +134,7 @@ async def get_media_info(url: str = Query(...)):
                 
         raise HTTPException(
             status_code=400, 
-            detail="No se pudo obtener información del video. Prueba con otro enlace de YouTube, TikTok, Vimeo o Twitter."
+            detail="No se pudo obtener información del video. Prueba con otro enlace multimedia."
         )
 
 @router.post("/download")
